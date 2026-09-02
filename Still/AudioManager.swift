@@ -203,7 +203,7 @@ final class AudioManager: ObservableObject {
             try audioSession.setCategory(
                 .playback,
                 mode: .default,
-                options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+                options: [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
             )
         } catch {
             print("Still audio session could not be configured: \(error.localizedDescription)")

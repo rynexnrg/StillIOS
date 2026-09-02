@@ -1,4 +1,5 @@
 import ActivityKit
+import Foundation
 
 struct StillActivityAttributes: ActivityAttributes {
     enum Mode: String, Codable, Hashable {
