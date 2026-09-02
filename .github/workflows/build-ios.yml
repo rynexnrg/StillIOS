@@ -30,20 +30,26 @@ jobs:
     - name: Xcode-Projekt (Still.xcodeproj) generieren
       run: xcodegen generate
 
-    - name: App & Widgets kompilieren (Simulator)
+    - name: App für echtes iOS-Gerät archivieren (unsigniert)
       run: |
-        xcodebuild build \
+        xcodebuild archive \
           -project Still.xcodeproj \
           -scheme Still \
-          -sdk iphonesimulator \
-          -configuration Debug \
-          -derivedDataPath build \
-          CODE_SIGN_IDENTITY="" \
-          CODE_SIGNING_REQUIRED=NO
+          -sdk iphoneos \
+          -archivePath build/Still.xcarchive \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY=""
 
-    - name: Build Artifacts speichern
+    - name: Unsignierte .ipa Datei paketieren
+      run: |
+        mkdir -p build/Payload
+        cp -r build/Still.xcarchive/Products/Applications/*.app build/Payload/
+        cd build && zip -r Still.ipa Payload
+
+    - name: .ipa Artefakt speichern
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: Still-iOS-Build
-        path: build/Build/Products/Debug-iphonesimulator/
+        name: Still-iOS-IPA
+        path: build/Still.ipa
