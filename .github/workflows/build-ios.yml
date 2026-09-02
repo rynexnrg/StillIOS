@@ -21,7 +21,9 @@ jobs:
       run: brew install xcodegen
 
     - name: Xcode-Projekt (Still.xcodeproj) generieren
-      run: xcodegen generate
+      run: |
+        rm -rf /var/folders/*/*/*/XcodeGen || true
+        xcodegen generate --use-cache false
 
     - name: App & Widgets kompilieren (Simulator)
       run: |
