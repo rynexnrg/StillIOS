@@ -20,10 +20,15 @@ jobs:
     - name: XcodeGen installieren
       run: brew install xcodegen
 
-    - name: Xcode-Projekt (Still.xcodeproj) generieren
+    - name: Alte Caches und Projekte bereinigen
       run: |
         rm -rf ~/.xcodegen/cache
-        xcodegen generate
+        rm -rf Still.xcodeproj
+        rm -rf build/
+        rm -rf DerivedData/
+
+    - name: Xcode-Projekt (Still.xcodeproj) generieren
+      run: xcodegen generate
 
     - name: App & Widgets kompilieren (Simulator)
       run: |
