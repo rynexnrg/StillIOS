@@ -1,164 +1,226 @@
-import Foundation
 import AVFoundation
-import MediaPlayer
+import Combine
+import Foundation
 
-class AudioManager: ObservableObject {
-    static let shared = AudioManager()
-    
-    @Published var isFocusActive: Bool = false
-    @Published var remainingTimerTime: TimeInterval = 0
-    @Published var isTimerRunning: Bool = false
-    @Published var alarmTime: Date? = nil
-    
-    private var audioPlayer: AVAudioPlayer?
-    private var alarmPlayer: AVAudioPlayer?
+@MainActor
+final class AudioManager: ObservableObject {
+    @Published private(set) var isPlaying = false
+    @Published private(set) var isAlarmPlaying = false
+    @Published private(set) var timerEndDate: Date?
+    @Published private(set) var timerIsPaused = false
+    @Published private(set) var alarmDate: Date?
+
+    private let audioSession = AVAudioSession.sharedInstance()
+    private var audioEngine: AVAudioEngine?
     private var timer: Timer?
-    private var alarmCheckTimer: Timer?
-    
+    private var pausedRemaining: TimeInterval?
+    private var alarmTimer: Timer?
+    private var alarmStopTask: Task<Void, Never>?
+
     init() {
-        setupAudioSession()
+        configureAudioSession()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRouteChange),
+            name: AVAudioSession.routeChangeNotification,
+            object: audioSession
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: audioSession
+        )
     }
-    
-    private func setupAudioSession() {
-        do {
-            // Ermöglicht die Wiedergabe im Hintergrund und die Ausgabe an Bluetooth-Geräte (.allowBluetoothHFP ersetzt .allowBluetooth)
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("AudioSession Fehler: \(error)")
-        }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
-    
-    // Generiert ein digitales, unhörbares Signal (nahezu stumm)
-    private func createSilentAudioPlayer() -> AVAudioPlayer? {
-        let sampleRate = 44100.0
-        let duration = 5.0
-        let numSamples = Int(sampleRate * duration)
-        
-        var samples = [Float](repeating: 0.0, count: numSamples)
-        // Sehr geringe Amplitude, um für Menschen unhörbar zu bleiben, aber den Datenstrom aktiv zu halten
-        for i in 0..<numSamples {
-            samples[i] = Float.random(in: -0.00001...0.00001)
-        }
-        
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(numSamples)) else { return nil }
-        buffer.frameLength = AVAudioFrameCount(numSamples)
-        
-        let channels = buffer.floatChannelData![0]
-        for i in 0..<numSamples {
-            channels[i] = samples[i]
-        }
-        
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: sampleRate,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey: true
-        ]
-        
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("silent.wav")
-        
-        do {
-            let audioFile = try AVAudioFile(forWriting: tempURL, settings: settings)
-            try audioFile.write(from: buffer)
-            let player = try AVAudioPlayer(contentsOf: tempURL)
-            player.numberOfLoops = -1 // Endlosschleife
-            return player
-        } catch {
-            print("Fehler beim Erstellen des Stumm-Audio-Players: \(error)")
-            return nil
-        }
+
+    var timerRemaining: TimeInterval {
+        if timerIsPaused, let pausedRemaining { return pausedRemaining }
+        guard let timerEndDate else { return 0 }
+        return max(0, timerEndDate.timeIntervalSinceNow)
     }
-    
-    // MARK: - Fokus-Modus
+
+    func toggleFocus() {
+        isPlaying ? stopFocus() : startFocus()
+    }
+
     func startFocus() {
-        stopAll()
-        audioPlayer = createSilentAudioPlayer()
-        audioPlayer?.play()
-        isFocusActive = true
-    }
-    
-    func stopFocus() {
-        audioPlayer?.stop()
-        isFocusActive = false
-    }
-    
-    // MARK: - Timer
-    func startTimer(duration: TimeInterval) {
-        stopAll()
-        remainingTimerTime = duration
-        isTimerRunning = true
-        
-        audioPlayer = createSilentAudioPlayer()
-        audioPlayer?.play()
-        
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            if self.remainingTimerTime > 1 {
-                self.remainingTimerTime -= 1
-            } else {
-                self.stopTimer()
+        guard !isPlaying else { return }
+        do {
+            try audioSession.setActive(true, options: [])
+            let engine = AVAudioEngine()
+            let format = engine.mainMixerNode.outputFormat(forBus: 0)
+            let source = AVAudioSourceNode { _, _, frameCount, audioBufferList in
+                let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                for buffer in buffers {
+                    memset(buffer.mData, 0, Int(buffer.mDataByteSize))
+                }
+                return noErr
             }
+            engine.attach(source)
+            engine.connect(source, to: engine.mainMixerNode, format: format)
+            engine.mainMixerNode.outputVolume = 1
+            try engine.start()
+            audioEngine = engine
+            isPlaying = true
+            StillActivityCoordinator.shared.showFocus()
+        } catch {
+            audioEngine = nil
+            isPlaying = false
+            print("Still audio could not start: \(error.localizedDescription)")
         }
     }
-    
-    func stopTimer() {
+
+    func stopFocus() {
+        audioEngine?.stop()
+        audioEngine = nil
+        isPlaying = false
+        if !isAlarmPlaying {
+            try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+        }
+    }
+
+    func startTimer(duration: TimeInterval) {
+        guard duration > 0 else { return }
+        startFocus()
+        timer?.invalidate()
+        timerEndDate = Date().addingTimeInterval(duration)
+        pausedRemaining = nil
+        timerIsPaused = false
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateTimer() }
+        }
+        StillActivityCoordinator.shared.showTimer(endDate: timerEndDate!, isPaused: false)
+    }
+
+    func pauseTimer() {
+        guard let timerEndDate else { return }
         timer?.invalidate()
         timer = nil
-        audioPlayer?.stop()
-        isTimerRunning = false
-        remainingTimerTime = 0
+        pausedRemaining = max(0, timerEndDate.timeIntervalSinceNow)
+        timerIsPaused = true
+        StillActivityCoordinator.shared.updateTimer(endDate: Date().addingTimeInterval(pausedRemaining!), isPaused: true)
     }
-    
-    // MARK: - Wecker
-    func setAlarm(targetTime: Date) {
-        stopAll()
-        alarmTime = targetTime
-        
-        audioPlayer = createSilentAudioPlayer()
-        audioPlayer?.play()
-        
-        alarmCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self, let target = self.alarmTime else { return }
-            if Date() >= target {
-                self.triggerAlarm()
-            }
+
+    func resumeTimer() {
+        guard timerEndDate != nil else { return }
+        timerEndDate = Date().addingTimeInterval(pausedRemaining ?? timerRemaining)
+        pausedRemaining = nil
+        timerIsPaused = false
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateTimer() }
+        }
+        StillActivityCoordinator.shared.updateTimer(endDate: timerEndDate!, isPaused: false)
+    }
+
+    func cancelTimer() {
+        timer?.invalidate()
+        timer = nil
+        timerEndDate = nil
+        pausedRemaining = nil
+        timerIsPaused = false
+        if !isAlarmPlaying { stopFocus() }
+        StillActivityCoordinator.shared.finish()
+    }
+
+    func scheduleAlarm(at date: Date) {
+        alarmTimer?.invalidate()
+        alarmDate = date
+        startFocus()
+        StillActivityCoordinator.shared.showAlarm(date: date)
+        let delay = max(0, date.timeIntervalSinceNow)
+        alarmTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.fireAlarm() }
         }
     }
-    
-    private func triggerAlarm() {
-        alarmCheckTimer?.invalidate()
-        alarmCheckTimer = nil
-        audioPlayer?.stop()
-        
-        // Hier den Weckton über das Bluetooth-Gerät abspielen
-        playAlarmSound()
-    }
-    
-    private func playAlarmSound() {
-        guard let url = Bundle.main.url(forResource: "alarm", withExtension: "mp3") else { return }
-        do {
-            alarmPlayer = try AVAudioPlayer(contentsOf: url)
-            alarmPlayer?.play()
-        } catch {
-            print("Fehler beim Weckton: \(error)")
-        }
-    }
-    
+
     func cancelAlarm() {
-        alarmCheckTimer?.invalidate()
-        alarmCheckTimer = nil
-        audioPlayer?.stop()
-        alarmPlayer?.stop()
-        alarmTime = nil
+        alarmTimer?.invalidate()
+        alarmTimer = nil
+        alarmDate = nil
+        if !isAlarmPlaying && timerEndDate == nil { stopFocus() }
+        StillActivityCoordinator.shared.finish()
     }
-    
-    func stopAll() {
+
+    private func updateTimer() {
+        guard timerEndDate != nil else { return }
+        if timerRemaining <= 0 {
+            cancelTimer()
+        }
+    }
+
+    private func fireAlarm() {
+        alarmTimer = nil
+        alarmDate = nil
         stopFocus()
-        stopTimer()
-        cancelAlarm()
+        isAlarmPlaying = true
+        do {
+            try audioSession.setActive(true, options: [])
+            let engine = AVAudioEngine()
+            let sampleRate = audioSession.sampleRate > 0 ? audioSession.sampleRate : 44_100
+            var phase = 0.0
+            let source = AVAudioSourceNode { _, _, frameCount, audioBufferList in
+                let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                let increment = 2.0 * Double.pi * 880 / sampleRate
+                for frame in 0..<Int(frameCount) {
+                    let sample = Float(sin(phase) * 0.18)
+                    phase += increment
+                    for buffer in buffers {
+                        buffer.mData?.assumingMemoryBound(to: Float.self)[frame] = sample
+                    }
+                }
+                return noErr
+            }
+            let format = engine.mainMixerNode.outputFormat(forBus: 0)
+            engine.attach(source)
+            engine.connect(source, to: engine.mainMixerNode, format: format)
+            try engine.start()
+            audioEngine = engine
+            alarmStopTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                await MainActor.run { self?.stopAlarm() }
+            }
+        } catch {
+            stopAlarm()
+        }
+    }
+
+    private func stopAlarm() {
+        alarmStopTask?.cancel()
+        alarmStopTask = nil
+        audioEngine?.stop()
+        audioEngine = nil
+        isAlarmPlaying = false
+        try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    private func configureAudioSession() {
+        do {
+            try audioSession.setCategory(
+                .playback,
+                mode: .default,
+                options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+            )
+        } catch {
+            print("Still audio session could not be configured: \(error.localizedDescription)")
+        }
+    }
+
+    @objc private func handleRouteChange() {
+        guard isPlaying, audioEngine?.isRunning == false else { return }
+        startFocus()
+    }
+
+    @objc private func handleInterruption(_ notification: Notification) {
+        guard isPlaying,
+              let info = notification.userInfo,
+              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+              type == .ended else { return }
+        startFocus()
     }
 }

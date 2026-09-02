@@ -1,181 +1,127 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var audioManager = AudioManager.shared
-    @State private var selectedTab: Int = 0
-    @State private var timerMinutes: Double = 15
-    @State private var alarmDate: Date = Date()
-    
+    @StateObject private var audio = AudioManager()
+    @State private var selectedTab = 0
+    @State private var timerMinutes = 5.0
+    @State private var alarmTime = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+
     var body: some View {
         ZStack {
-            // Dunkler, tiefer Hintergrund
-            LinearGradient(colors: [Color.black, Color(white: 0.08)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [Color(red: 0.04, green: 0.05, blue: 0.08), Color(red: 0.12, green: 0.16, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
-            
-            VStack(spacing: 30) {
-                // Header
-                Text("STILL")
-                    .font(.system(size: 20, weight: .light, design: .monospaced))
-                    .tracking(8)
-                    .foregroundColor(.white.opacity(0.6))
-                    .padding(.top, 20)
-                
-                // Tab-Auswahl (Liquid-Glass Segmented Control)
-                HStack {
-                    TabButton(title: "Fokus", isSelected: selectedTab == 0) { selectedTab = 0 }
-                    TabButton(title: "Timer", isSelected: selectedTab == 1) { selectedTab = 1 }
-                    TabButton(title: "Wecker", isSelected: selectedTab == 2) { selectedTab = 2 }
-                }
-                .padding(4)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                // Content je nach Tab
-                if selectedTab == 0 {
-                    focusView
-                } else if selectedTab == 1 {
-                    timerView
-                } else {
-                    alarmView
-                }
-                
-                Spacer()
+            VStack(spacing: 0) {
+                Text("S T I L L").font(.system(size: 21, weight: .light, design: .monospaced)).foregroundStyle(.white.opacity(0.82)).padding(.top, 18)
+                modePicker.padding(.top, 28)
+                Spacer(minLength: 28)
+                Group { switch selectedTab { case 1: timerView; case 2: alarmView; default: focusView } }
+                    .frame(maxWidth: 520)
+                Spacer(minLength: 28)
             }
-            .padding()
+            .padding(.horizontal, 22)
+        }
+        .preferredColorScheme(.dark)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            StillIntentBridge.consumePendingCommands(audio: audio)
         }
     }
-    
-    // MARK: - Fokus View
-    var focusView: some View {
-        VStack(spacing: 40) {
-            Button(action: {
-                if audioManager.isFocusActive {
-                    audioManager.stopFocus()
-                } else {
-                    audioManager.startFocus()
-                }
-            }) {
+
+    private var modePicker: some View {
+        HStack(spacing: 2) {
+            modeButton("Fokus", tag: 0)
+            modeButton("Timer", tag: 1)
+            modeButton("Wecker", tag: 2)
+        }
+        .padding(4)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.18), lineWidth: 0.5))
+    }
+
+    private func modeButton(_ title: String, tag: Int) -> some View {
+        Button(title) { withAnimation(.easeInOut(duration: 0.25)) { selectedTab = tag } }
+            .font(.system(size: 14, weight: selectedTab == tag ? .medium : .regular))
+            .foregroundStyle(selectedTab == tag ? .black : .white.opacity(0.8))
+            .frame(maxWidth: .infinity).padding(.vertical, 11)
+            .background(selectedTab == tag ? Color.white : .clear, in: Capsule())
+    }
+
+    private var focusView: some View {
+        VStack(spacing: 34) {
+            statusLabel(audio.isPlaying ? "Fokus aktiv" : "Bereit")
+            Button { withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { audio.toggleFocus() } } label: {
                 ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 200, height: 200)
-                        .overlay(
-                            Circle()
-                                .stroke(audioManager.isFocusActive ? Color.white : Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                        .shadow(color: audioManager.isFocusActive ? .white.opacity(0.2) : .clear, radius: 20)
-                    
-                    Text(audioManager.isFocusActive ? "Aktiv" : "Starten")
-                        .font(.system(size: 22, weight: .ultraLight))
-                        .foregroundColor(.white)
+                    Circle().fill(.ultraThinMaterial).frame(width: 220, height: 220)
+                        .overlay(Circle().fill(audio.isPlaying ? .cyan.opacity(0.32) : .white.opacity(0.1)))
+                        .overlay(Circle().stroke(.white.opacity(0.48), lineWidth: 1))
+                        .shadow(color: audio.isPlaying ? .cyan.opacity(0.42) : .black.opacity(0.3), radius: 28, y: 12)
+                    Image(systemName: audio.isPlaying ? "pause.fill" : "waveform").font(.system(size: 30, weight: .light)).foregroundStyle(.white)
                 }
-            }
-            .animation(.easeInOut(duration: 0.4), value: audioManager.isFocusActive)
+            }.buttonStyle(.plain)
+            Text(audio.isPlaying ? "Deaktivieren" : "Aktivieren").font(.system(size: 17, weight: .light, design: .rounded)).foregroundStyle(.white.opacity(0.72))
         }
     }
-    
-    // MARK: - Timer View
-    var timerView: some View {
-        VStack(spacing: 30) {
-            if audioManager.isTimerRunning {
-                Text(formatTime(audioManager.remainingTimerTime))
-                    .font(.system(size: 64, weight: .ultraLight, design: .monospaced))
-                    .foregroundColor(.white)
-                
-                Button("Abbrechen") {
-                    audioManager.stopTimer()
-                }
-                .buttonStyle(GlassButtonStyle())
-            } else {
-                Text("\(Int(timerMinutes)) min")
-                    .font(.system(size: 48, weight: .ultraLight))
-                    .foregroundColor(.white)
-                
-                Slider(value: $timerMinutes, in: 1...120, step: 1)
-                    .accentColor(.white)
-                    .padding(.horizontal, 40)
-                
-                Button("Timer Starten") {
-                    audioManager.startTimer(duration: timerMinutes * 60)
-                }
-                .buttonStyle(GlassButtonStyle())
-            }
-        }
-    }
-    
-    // MARK: - Wecker View
-    var alarmView: some View {
-        VStack(spacing: 30) {
-            if let activeAlarm = audioManager.alarmTime {
-                Text("Wecker gestellt auf")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundColor(.white.opacity(0.5))
-                
-                Text(activeAlarm, style: .time)
-                    .font(.system(size: 54, weight: .ultraLight))
-                    .foregroundColor(.white)
-                
-                Button("Deaktivieren") {
-                    audioManager.cancelAlarm()
-                }
-                .buttonStyle(GlassButtonStyle())
-            } else {
-                DatePicker("", selection: $alarmDate, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .colorScheme(.dark)
-                
-                Button("Wecker Stellen") {
-                    audioManager.setAlarm(targetTime: alarmDate)
-                }
-                .buttonStyle(GlassButtonStyle())
-            }
-        }
-    }
-    
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-}
 
-// MARK: - Helper UI Components
-struct TabButton: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
+    private var timerView: some View {
+        VStack(spacing: 28) {
+            statusLabel(audio.timerEndDate == nil ? "Timer" : (audio.timerIsPaused ? "Pausiert" : "Läuft"))
+            Text(timeString(audio.timerRemaining > 0 ? audio.timerRemaining : timerMinutes * 60))
+                .font(.system(size: 58, weight: .ultraLight, design: .rounded)).monospacedDigit().foregroundStyle(.white)
+                .contentTransition(.numericText())
+            if audio.timerEndDate == nil {
+                Slider(value: $timerMinutes, in: 0.5...120, step: 0.5).tint(.cyan)
+                HStack {
+                    ForEach([0.5, 5.0, 30.0, 120.0], id: \.self) { value in
+                        Button(value < 1 ? "30 s" : value == 120 ? "2 h" : "\(Int(value)) min") { timerMinutes = value }
+                            .font(.caption).foregroundStyle(.white.opacity(0.72))
+                    }
+                }
+            }
+            HStack(spacing: 12) {
+                if audio.timerEndDate == nil {
+                    actionButton("Start", systemImage: "play.fill") { audio.startTimer(duration: timerMinutes * 60) }
+                } else {
+                    actionButton(audio.timerIsPaused ? "Fortsetzen" : "Pause", systemImage: audio.timerIsPaused ? "play.fill" : "pause.fill") { audio.timerIsPaused ? audio.resumeTimer() : audio.pauseTimer() }
+                    actionButton("Abbrechen", systemImage: "xmark") { audio.cancelTimer() }
+                }
+            }
+        }
+    }
+
+    private var alarmView: some View {
+        VStack(spacing: 30) {
+            statusLabel(audio.alarmDate == nil ? "Wecker" : "Wecker aktiv")
+            DatePicker("Zeit", selection: $alarmTime, displayedComponents: .hourAndMinute).datePickerStyle(.wheel).labelsHidden().frame(height: 150).clipped()
+            if let alarmDate = audio.alarmDate {
+                Text(alarmDate, style: .time).font(.system(size: 17, weight: .light, design: .rounded)).foregroundStyle(.white.opacity(0.72))
+                actionButton("Abbrechen", systemImage: "xmark") { audio.cancelAlarm() }
+            } else {
+                actionButton("Wecker stellen", systemImage: "bell.fill") { audio.scheduleAlarm(at: nextOccurrence(for: alarmTime)) }
+            }
+        }
+    }
+
+    private func statusLabel(_ text: String) -> some View {
+        Text(text.uppercased()).font(.system(size: 12, weight: .medium, design: .monospaced)).tracking(1.5).foregroundStyle(.white.opacity(0.6))
+    }
+
+    private func actionButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: isSelected ? .regular : .light))
-                .foregroundColor(isSelected ? .black : .white)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 20)
-                .background(isSelected ? Color.white : Color.clear)
-                .clipShape(Capsule())
+            Label(title, systemImage: systemImage).font(.system(size: 15, weight: .medium)).foregroundStyle(.black)
+                .padding(.horizontal, 20).padding(.vertical, 13).background(.white, in: Capsule())
         }
-        .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
-}
 
-struct GlassButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 16, weight: .light))
-            .foregroundColor(.white)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 32)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+    private func timeString(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        return String(format: "%02d:%02d:%02d", total / 3600, (total / 60) % 60, total % 60)
+    }
+
+    private func nextOccurrence(for date: Date) -> Date {
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.hour, .minute], from: date)
+        components.second = 0
+        var result = calendar.date(from: components) ?? date
+        if result <= Date() { result = calendar.date(byAdding: .day, value: 1, to: result) ?? result }
+        return result
     }
 }
