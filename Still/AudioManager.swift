@@ -21,8 +21,8 @@ class AudioManager: ObservableObject {
     
     private func setupAudioSession() {
         do {
-            // Ermöglicht die Wiedergabe im Hintergrund und die Ausgabe an Bluetooth-Geräte
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowBluetooth, .allowBluetoothA2DP])
+            // Ermöglicht die Wiedergabe im Hintergrund und die Ausgabe an Bluetooth-Geräte (.allowBluetoothHFP ersetzt .allowBluetooth)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("AudioSession Fehler: \(error)")
