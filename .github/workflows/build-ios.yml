@@ -22,8 +22,8 @@ jobs:
 
     - name: Xcode-Projekt (Still.xcodeproj) generieren
       run: |
-        rm -rf /var/folders/*/*/*/XcodeGen || true
-        xcodegen generate --use-cache false
+        rm -rf ~/.xcodegen/cache
+        xcodegen generate
 
     - name: App & Widgets kompilieren (Simulator)
       run: |
