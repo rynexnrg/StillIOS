@@ -30,7 +30,7 @@ jobs:
     - name: Xcode-Projekt (Still.xcodeproj) generieren
       run: xcodegen generate
 
-    - - name: App & Widgets kompilieren (Simulator)
+    - name: App & Widgets kompilieren (Simulator)
       run: |
         xcodebuild build \
           -project Still.xcodeproj \
