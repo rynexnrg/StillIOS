@@ -52,7 +52,7 @@ struct StillLiveActivity: Widget {
                     .foregroundStyle(.cyan)
                 VStack(alignment: .leading) {
                     Text(context.attributes.title).font(.headline)
-                    if context.state.mode == .alarm, let date = context.state.alarmDate {
+                    if context.attributes.mode == .alarm, let date = context.state.alarmDate {
                         Text(date, style: .time).font(.caption)
                     } else if let endDate = context.state.endDate {
                         Text(timerInterval: Date()...endDate, countsDown: true).font(.caption.monospacedDigit())
