@@ -1,0 +1,37 @@
+name: Build Still iOS App
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Code auschecken
+      uses: actions/checkout@v4
+
+    - name: XcodeGen installieren
+      run: brew install xcodegen
+
+    - name: Xcode-Projekt (Still.xcodeproj) generieren
+      run: xcodegen generate
+
+    - name: App & Widgets kompilieren (Simulator)
+      run: |
+        xcodebuild build \
+          -project Still.xcodeproj \
+          -scheme Still \
+          -sdk iphonesimulator \
+          -configuration Debug \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO
+
+    - name: Build Artifacts speichern
+      uses: actions/upload-artifact@v4
+      with:
+        name: Still-iOS-Build
+        path: build/Build/Products/Debug-iphonesimulator/

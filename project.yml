@@ -1,0 +1,23 @@
+name: Still
+options:
+  bundleIdPrefix: com.johannes
+targets:
+  Still:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [Still]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.johannes.Still
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_NSSupportsLiveActivities: YES
+      INFOPLIST_KEY_UIBackgroundModes: ["audio"]
+
+  StillWidgetExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [StillWidgetExtension]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.johannes.Still.StillWidgetExtension
+      GENERATE_INFOPLIST_FILE: YES
