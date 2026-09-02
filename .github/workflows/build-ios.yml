@@ -30,13 +30,14 @@ jobs:
     - name: Xcode-Projekt (Still.xcodeproj) generieren
       run: xcodegen generate
 
-    - name: App für echtes iOS-Gerät archivieren (unsigniert)
+    - name: App für iOS-Simulator bauen
       run: |
-        xcodebuild archive \
+        xcodebuild build \
           -project Still.xcodeproj \
           -scheme Still \
-          -sdk iphoneos \
-          -archivePath build/Still.xcarchive \
+          -destination 'generic/platform=iOS Simulator' \
+          -configuration Release \
+          -derivedDataPath build/DerivedData \
           CODE_SIGNING_ALLOWED=NO \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGN_IDENTITY=""
@@ -45,5 +46,5 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: Still-iOS-App
-        path: build/Still.xcarchive/Products/Applications/Still.app
+        name: Still-iOS-Simulator-App
+        path: build/DerivedData/Build/Products/Release-iphonesimulator/Still.app
