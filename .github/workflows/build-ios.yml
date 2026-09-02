@@ -14,6 +14,9 @@ jobs:
     - name: Code auschecken
       uses: actions/checkout@v4
 
+    - name: Homebrew Tap-Trust Umgehung aktivieren
+      run: echo "HOMEBREW_NO_REQUIRE_TAP_TRUST=1" >> $GITHUB_ENV
+
     - name: XcodeGen installieren
       run: brew install xcodegen
 
@@ -32,6 +35,7 @@ jobs:
 
     - name: Build Artifacts speichern
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: Still-iOS-Build
         path: build/Build/Products/Debug-iphonesimulator/
