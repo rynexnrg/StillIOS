@@ -9,6 +9,7 @@ struct ContentView: View {
     @AppStorage("alarmTime", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmTime = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
     @AppStorage("soundEnabled", store: UserDefaults(suiteName: "group.com.johannes.still")) private var soundEnabled = true
     @AppStorage("vibrationEnabled", store: UserDefaults(suiteName: "group.com.johannes.still")) private var vibrationEnabled = true
+    @AppStorage("alarmSound", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmSound = "soft"
 
     var body: some View {
         ZStack {
@@ -16,12 +17,9 @@ struct ContentView: View {
                 .ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
-                    Text("S T I L L").font(.system(size: 21, weight: .light, design: .monospaced)).foregroundStyle(.white.opacity(0.82))
                     Spacer()
-                    Button { showingSettings = true } label: {
-                        Image(systemName: "gearshape").font(.system(size: 17, weight: .medium)).foregroundStyle(.white.opacity(0.82))
-                    }
-                    .buttonStyle(.plain)
+                    Text("Still").font(.system(size: 25, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.9))
+                    Spacer()
                 }
                 .padding(.top, 18)
                 .padding(.horizontal, 8)
@@ -44,6 +42,12 @@ struct ContentView: View {
             modeButton("Fokus", tag: 0)
             modeButton("Timer", tag: 1)
             modeButton("Wecker", tag: 2)
+            Button { showingSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 42, height: 38)
+            }
+            .buttonStyle(.plain)
         }
         .padding(4)
         .background(.ultraThinMaterial, in: Capsule())
@@ -84,7 +88,7 @@ struct ContentView: View {
     private var timerView: some View {
         VStack(spacing: 28) {
             statusLabel(audio.timerEndDate == nil ? "Timer" : (audio.timerIsPaused ? "Pausiert" : "Läuft"))
-            Text(timeString(audio.timerRemaining > 0 ? audio.timerRemaining : timerMinutes * 60))
+            Text(timerDisplay)
                 .font(.system(size: 58, weight: .ultraLight, design: .rounded)).monospacedDigit().foregroundStyle(.white)
                 .contentTransition(.numericText())
             if audio.timerEndDate == nil {
@@ -127,6 +131,13 @@ struct ContentView: View {
                     Toggle("Ton", isOn: $soundEnabled)
                     Toggle("Vibration", isOn: $vibrationEnabled)
                 }
+                Section("Weckton") {
+                    Picker("Ton auswählen", selection: $alarmSound) {
+                        Text("Sanft").tag("soft")
+                        Text("Hell").tag("bright")
+                        Text("Tief").tag("deep")
+                    }
+                }
                 Section("Standard-Timer") {
                     Stepper(value: $timerMinutes, in: 0.5...120, step: 0.5) {
                         Text(timerMinutes < 1 ? "30 Sekunden" : "\(timerMinutes, specifier: "%g") Minuten")
@@ -145,6 +156,11 @@ struct ContentView: View {
 
     private var sessionHistory: [[String: Any]] {
         (appGroup?.array(forKey: "focusSessionHistory") as? [[String: Any]]) ?? []
+    }
+
+    private var timerDisplay: String {
+        _ = audio.timerTick
+        return timeString(audio.timerRemaining > 0 ? audio.timerRemaining : timerMinutes * 60)
     }
 
     private var completedSessions: Int { sessionHistory.count }

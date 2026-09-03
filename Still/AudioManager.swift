@@ -11,6 +11,7 @@ final class AudioManager: ObservableObject {
     @Published private(set) var timerEndDate: Date?
     @Published private(set) var timerIsPaused = false
     @Published private(set) var alarmDate: Date?
+    @Published private(set) var timerTick = Date()
 
     private let audioSession = AVAudioSession.sharedInstance()
     private var audioEngine: AVAudioEngine?
@@ -101,7 +102,7 @@ final class AudioManager: ObservableObject {
         timerIsPaused = false
         defaults.set(duration, forKey: "timerDuration")
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateTimer() }
+            Task { @MainActor in self?.timerTick = Date(); self?.updateTimer() }
         }
         scheduleNotification(
             identifier: timerNotificationID,
@@ -128,7 +129,7 @@ final class AudioManager: ObservableObject {
         pausedRemaining = nil
         timerIsPaused = false
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateTimer() }
+            Task { @MainActor in self?.timerTick = Date(); self?.updateTimer() }
         }
         scheduleNotification(
             identifier: timerNotificationID,
@@ -154,7 +155,6 @@ final class AudioManager: ObservableObject {
     func scheduleAlarm(at date: Date) {
         alarmTimer?.invalidate()
         alarmDate = date
-        startFocus()
         scheduleNotification(
             identifier: alarmNotificationID,
             title: "Still-Wecker",
@@ -202,7 +202,8 @@ final class AudioManager: ObservableObject {
             var phase = 0.0
             let source = AVAudioSourceNode { _, _, frameCount, audioBufferList in
                 let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
-                let increment = 2.0 * Double.pi * 880 / sampleRate
+                let frequency = alarmFrequency
+                let increment = 2.0 * Double.pi * frequency / sampleRate
                 for frame in 0..<Int(frameCount) {
                     let sample = Float(sin(phase) * 0.18)
                     phase += increment
@@ -248,6 +249,14 @@ final class AudioManager: ObservableObject {
         }
     }
 
+    private var alarmFrequency: Double {
+        switch defaults.string(forKey: "alarmSound") ?? "soft" {
+        case "bright": return 1046.5
+        case "deep": return 440
+        default: return 660
+        }
+    }
+
     private func restoreState() {
         if let timestamp = defaults.object(forKey: "timerEndDate") as? Double {
             let endDate = Date(timeIntervalSince1970: timestamp)
@@ -264,7 +273,7 @@ final class AudioManager: ObservableObject {
             } else if endDate > Date() {
                 startFocus()
                 timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                    Task { @MainActor in self?.updateTimer() }
+                    Task { @MainActor in self?.timerTick = Date(); self?.updateTimer() }
                 }
                 scheduleNotification(
                     identifier: timerNotificationID,
@@ -281,7 +290,6 @@ final class AudioManager: ObservableObject {
             let date = Date(timeIntervalSince1970: timestamp)
             if date > Date() {
                 alarmDate = date
-                startFocus()
                 alarmTimer = Timer.scheduledTimer(withTimeInterval: date.timeIntervalSinceNow, repeats: false) { [weak self] _ in
                     Task { @MainActor in self?.fireAlarm() }
                 }
