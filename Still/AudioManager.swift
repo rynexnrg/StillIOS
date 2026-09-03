@@ -176,6 +176,7 @@ final class AudioManager: ObservableObject {
     func scheduleAlarm(at date: Date) {
         alarmTimer?.invalidate()
         alarmDate = date
+        startFocus()
         scheduleNotification(
             identifier: alarmNotificationID,
             title: "Still-Wecker",
@@ -215,12 +216,15 @@ final class AudioManager: ObservableObject {
         alarmTimer = nil
         alarmDate = nil
         persistState()
+        isAlarmPlaying = true
         stopFocus()
-        guard defaults.bool(forKey: "soundEnabled") else { return }
+        guard defaults.bool(forKey: "soundEnabled") else {
+            isAlarmPlaying = false
+            return
+        }
         if defaults.bool(forKey: "vibrationEnabled") {
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         }
-        isAlarmPlaying = true
         if playBundledAlarmSound() { return }
         do {
             try audioSession.setActive(true, options: [])
@@ -266,7 +270,7 @@ final class AudioManager: ObservableObject {
             try audioSession.setCategory(
                 .playback,
                 mode: .default,
-                options: [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
+                options: [.allowBluetooth, .allowBluetoothA2DP, .allowBluetoothHFP, .mixWithOthers]
             )
         } catch {
             print("Still audio session could not be configured: \(error.localizedDescription)")
@@ -320,6 +324,7 @@ final class AudioManager: ObservableObject {
             let date = Date(timeIntervalSince1970: timestamp)
             if date > Date() {
                 alarmDate = date
+                startFocus()
                 alarmTimer = Timer.scheduledTimer(withTimeInterval: date.timeIntervalSinceNow, repeats: false) { [weak self] _ in
                     Task { @MainActor in self?.fireAlarm() }
                 }
