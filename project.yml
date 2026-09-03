@@ -7,6 +7,8 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     sources: [Still]
+    resources:
+      - path: Still/Sounds
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.johannes.Still
       GENERATE_INFOPLIST_FILE: YES

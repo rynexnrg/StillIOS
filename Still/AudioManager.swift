@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import AudioToolbox
 import UserNotifications
+import AVFAudio
 
 @MainActor
 final class AudioManager: ObservableObject {
@@ -12,6 +13,7 @@ final class AudioManager: ObservableObject {
     @Published private(set) var timerIsPaused = false
     @Published private(set) var alarmDate: Date?
     @Published private(set) var timerTick = Date()
+    @Published private(set) var focusElapsed: TimeInterval = 0
 
     private let audioSession = AVAudioSession.sharedInstance()
     private var audioEngine: AVAudioEngine?
@@ -19,6 +21,9 @@ final class AudioManager: ObservableObject {
     private var pausedRemaining: TimeInterval?
     private var alarmTimer: Timer?
     private var alarmStopTask: Task<Void, Never>?
+    private var focusStartedAt: Date?
+    private var focusTicker: Timer?
+    private var alarmPlayer: AVAudioPlayer?
     private let defaults = UserDefaults(suiteName: "group.com.johannes.still") ?? .standard
     private let timerNotificationID = "still.timer.finished"
     private let alarmNotificationID = "still.alarm.fired"
@@ -75,6 +80,12 @@ final class AudioManager: ObservableObject {
             try engine.start()
             audioEngine = engine
             isPlaying = true
+            focusStartedAt = Date()
+            focusElapsed = 0
+            focusTicker?.invalidate()
+            focusTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.updateFocusElapsed() }
+            }
             defaults.set(true, forKey: "focusIsActive")
         } catch {
             audioEngine = nil
@@ -87,6 +98,10 @@ final class AudioManager: ObservableObject {
         audioEngine?.stop()
         audioEngine = nil
         isPlaying = false
+        focusStartedAt = nil
+        focusElapsed = 0
+        focusTicker?.invalidate()
+        focusTicker = nil
         defaults.set(false, forKey: "focusIsActive")
         if !isAlarmPlaying {
             try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
@@ -102,7 +117,7 @@ final class AudioManager: ObservableObject {
         timerIsPaused = false
         defaults.set(duration, forKey: "timerDuration")
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.timerTick = Date(); self?.updateTimer() }
+            Task { @MainActor in self?.timerTick = Date(); self?.updateFocusElapsed(); self?.updateTimer() }
         }
         scheduleNotification(
             identifier: timerNotificationID,
@@ -129,7 +144,7 @@ final class AudioManager: ObservableObject {
         pausedRemaining = nil
         timerIsPaused = false
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.timerTick = Date(); self?.updateTimer() }
+            Task { @MainActor in self?.timerTick = Date(); self?.updateFocusElapsed(); self?.updateTimer() }
         }
         scheduleNotification(
             identifier: timerNotificationID,
@@ -185,6 +200,11 @@ final class AudioManager: ObservableObject {
         }
     }
 
+    private func updateFocusElapsed() {
+        guard isPlaying, let focusStartedAt else { return }
+        focusElapsed = Date().timeIntervalSince(focusStartedAt)
+    }
+
     private func fireAlarm() {
         alarmTimer = nil
         alarmDate = nil
@@ -195,6 +215,7 @@ final class AudioManager: ObservableObject {
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         }
         isAlarmPlaying = true
+        if playBundledAlarmSound() { return }
         do {
             try audioSession.setActive(true, options: [])
             let engine = AVAudioEngine()
@@ -233,6 +254,8 @@ final class AudioManager: ObservableObject {
         alarmStopTask = nil
         audioEngine?.stop()
         audioEngine = nil
+        alarmPlayer?.stop()
+        alarmPlayer = nil
         isAlarmPlaying = false
         try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -257,6 +280,12 @@ final class AudioManager: ObservableObject {
         }
     }
 
+    private func playBundledAlarmSound() -> Bool {
+        let name = defaults.string(forKey: "alarmSound") ?? "ios-26"
+        guard let url = Bundle.main.url(forResource: name, withExtension: "mp3", subdirectory: "Sounds") else { return false }
+        do { alarmPlayer = try AVAudioPlayer(contentsOf: url); alarmPlayer?.numberOfLoops = -1; alarmPlayer?.play(); alarmStopTask = Task { [weak self] in try? await Task.sleep(for: .seconds(30)); guard !Task.isCancelled else { return }; await MainActor.run { self?.stopAlarm() } }; return true } catch { return false }
+    }
+
     private func restoreState() {
         if let timestamp = defaults.object(forKey: "timerEndDate") as? Double {
             let endDate = Date(timeIntervalSince1970: timestamp)
@@ -273,7 +302,7 @@ final class AudioManager: ObservableObject {
             } else if endDate > Date() {
                 startFocus()
                 timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                    Task { @MainActor in self?.timerTick = Date(); self?.updateTimer() }
+                    Task { @MainActor in self?.timerTick = Date(); self?.updateFocusElapsed(); self?.updateTimer() }
                 }
                 scheduleNotification(
                     identifier: timerNotificationID,
@@ -350,7 +379,9 @@ final class AudioManager: ObservableObject {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = defaults.bool(forKey: "soundEnabled") ? .default : nil
+        if defaults.bool(forKey: "soundEnabled") {
+            content.sound = identifier == alarmNotificationID ? UNNotificationSound(named: "\(defaults.string(forKey: "alarmSound") ?? "ios-26").mp3") : .default
+        }
         content.categoryIdentifier = identifier == alarmNotificationID ? "STILL_ALARM" : "STILL_TIMER"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)

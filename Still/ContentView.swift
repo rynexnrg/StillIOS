@@ -9,7 +9,10 @@ struct ContentView: View {
     @AppStorage("alarmTime", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmTime = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
     @AppStorage("soundEnabled", store: UserDefaults(suiteName: "group.com.johannes.still")) private var soundEnabled = true
     @AppStorage("vibrationEnabled", store: UserDefaults(suiteName: "group.com.johannes.still")) private var vibrationEnabled = true
-    @AppStorage("alarmSound", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmSound = "soft"
+    @AppStorage("alarmSound", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmSound = "ios-26"
+    @State private var timerHours = 0
+    @State private var timerWheelMinutes = 5
+    @State private var timerSeconds = 0
 
     var body: some View {
         ZStack {
@@ -76,8 +79,8 @@ struct ContentView: View {
                     VStack(spacing: 10) {
                         Image(systemName: audio.isPlaying ? "pause.fill" : "waveform")
                             .font(.system(size: 28, weight: .medium))
-                        Text(audio.isPlaying ? "ON" : "START")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced)).tracking(2)
+                        Text(audio.isPlaying ? elapsedString(audio.focusElapsed) : "START")
+                            .font(.system(size: audio.isPlaying ? 17 : 10, weight: .medium, design: .monospaced)).tracking(audio.isPlaying ? 1 : 2)
                     }.foregroundStyle(.white)
                 }
             }.buttonStyle(.plain)
@@ -92,17 +95,24 @@ struct ContentView: View {
                 .font(.system(size: 58, weight: .ultraLight, design: .rounded)).monospacedDigit().foregroundStyle(.white)
                 .contentTransition(.numericText())
             if audio.timerEndDate == nil {
-                Slider(value: $timerMinutes, in: 0.5...120, step: 0.5).tint(.cyan)
+                HStack(spacing: 0) {
+                    timerWheel(title: "Std.", value: $timerHours, range: 0...99)
+                    Text(":").font(.title2).foregroundStyle(.secondary)
+                    timerWheel(title: "Min.", value: $timerWheelMinutes, range: 0...99)
+                    Text(":").font(.title2).foregroundStyle(.secondary)
+                    timerWheel(title: "Sek.", value: $timerSeconds, range: 0...99)
+                }.frame(height: 120).clipped()
                 HStack {
-                    ForEach([0.5, 5.0, 30.0, 120.0], id: \.self) { value in
-                        Button(value < 1 ? "30 s" : value == 120 ? "2 h" : "\(Int(value)) min") { timerMinutes = value }
-                            .font(.caption).foregroundStyle(.white.opacity(0.72))
+                    presetButton("30 s", hours: 0, minutes: 0, seconds: 30)
+                    presetButton("5 min", hours: 0, minutes: 5, seconds: 0)
+                    presetButton("30 min", hours: 0, minutes: 30, seconds: 0)
+                    presetButton("2 h", hours: 2, minutes: 0, seconds: 0)
                     }
                 }
             }
             HStack(spacing: 12) {
                 if audio.timerEndDate == nil {
-                    actionButton("Start", systemImage: "play.fill") { audio.startTimer(duration: timerMinutes * 60) }
+                    actionButton("Start", systemImage: "play.fill") { audio.startTimer(duration: selectedTimerDuration) }
                 } else {
                     actionButton(audio.timerIsPaused ? "Fortsetzen" : "Pause", systemImage: audio.timerIsPaused ? "play.fill" : "pause.fill") { audio.timerIsPaused ? audio.resumeTimer() : audio.pauseTimer() }
                     actionButton("Abbrechen", systemImage: "xmark") { audio.cancelTimer() }
@@ -133,9 +143,7 @@ struct ContentView: View {
                 }
                 Section("Weckton") {
                     Picker("Ton auswählen", selection: $alarmSound) {
-                        Text("Sanft").tag("soft")
-                        Text("Hell").tag("bright")
-                        Text("Tief").tag("deep")
+                        ForEach(alarmSounds, id: \.id) { sound in Text(sound.name).tag(sound.id) }
                     }
                 }
                 Section("Standard-Timer") {
@@ -162,6 +170,13 @@ struct ContentView: View {
         _ = audio.timerTick
         return timeString(audio.timerRemaining > 0 ? audio.timerRemaining : timerMinutes * 60)
     }
+
+    private var selectedTimerDuration: TimeInterval { max(1, TimeInterval(timerHours * 3600 + timerWheelMinutes * 60 + timerSeconds)) }
+    private let alarmSounds = [AlarmSound(id: "ios-26", name: "IOS Wecker"), AlarmSound(id: "Morning-Coffee", name: "Morning Coffee"), AlarmSound(id: "hava-nagila-1-hours-0", name: "Hava Nagila"), AlarmSound(id: "SpongeBob-Schwammkopf", name: "SpongBob"), AlarmSound(id: "Pacman", name: "Pacman"), AlarmSound(id: "Monte-Wecker", name: "Wecker"), AlarmSound(id: "michael-jackson-billie-jean", name: "Micael Jackson"), AlarmSound(id: "2017-youtube-background-music-low-quality", name: "High Quality Backround Music")]
+
+    private func timerWheel(title: String, value: Binding<Int>, range: ClosedRange<Int>) -> some View { VStack(spacing: 0) { Picker(title, selection: value) { ForEach(range, id: \.self) { Text(String(format: "%02d", $0)).tag($0) } }.pickerStyle(.wheel).labelsHidden(); Text(title).font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity) }
+    private func presetButton(_ title: String, hours: Int, minutes: Int, seconds: Int) -> some View { Button(title) { timerHours = hours; timerWheelMinutes = minutes; timerSeconds = seconds }.font(.caption.weight(.semibold)).foregroundStyle(.white).padding(.horizontal, 10).padding(.vertical, 8).background(.white.opacity(0.1), in: Capsule()).overlay(Capsule().stroke(.white.opacity(0.2))) }
+    private func elapsedString(_ seconds: TimeInterval) -> String { let total = max(0, Int(seconds)); return String(format: "%02d:%02d:%02d", total / 3600, (total / 60) % 60, total % 60) }
 
     private var completedSessions: Int { sessionHistory.count }
 
@@ -198,3 +213,5 @@ struct ContentView: View {
         return result
     }
 }
+
+private struct AlarmSound { let id: String; let name: String }
