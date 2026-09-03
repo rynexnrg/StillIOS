@@ -3,15 +3,27 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var audio = AudioManager()
     @State private var selectedTab = 0
+    @State private var showingSettings = false
+    private let appGroup = UserDefaults(suiteName: "group.com.johannes.still")
     @AppStorage("timerMinutes", store: UserDefaults(suiteName: "group.com.johannes.still")) private var timerMinutes = 5.0
     @AppStorage("alarmTime", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmTime = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+    @AppStorage("soundEnabled", store: UserDefaults(suiteName: "group.com.johannes.still")) private var soundEnabled = true
+    @AppStorage("vibrationEnabled", store: UserDefaults(suiteName: "group.com.johannes.still")) private var vibrationEnabled = true
 
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(red: 0.04, green: 0.05, blue: 0.08), Color(red: 0.12, green: 0.16, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
             VStack(spacing: 0) {
-                Text("S T I L L").font(.system(size: 21, weight: .light, design: .monospaced)).foregroundStyle(.white.opacity(0.82)).padding(.top, 18)
+                HStack {
+                    Text("S T I L L").font(.system(size: 21, weight: .light, design: .monospaced)).foregroundStyle(.white.opacity(0.82))
+                    Spacer()
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape").font(.system(size: 17, weight: .medium)).foregroundStyle(.white.opacity(0.82))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 18)
                 modePicker.padding(.top, 28)
                 Spacer(minLength: 28)
                 Group { switch selectedTab { case 1: timerView; case 2: alarmView; default: focusView } }
@@ -24,6 +36,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             StillIntentBridge.consumePendingCommands(audio: audio)
         }
+        .sheet(isPresented: $showingSettings) { settingsView }
     }
 
     private var modePicker: some View {
@@ -98,6 +111,43 @@ struct ContentView: View {
                 actionButton("Wecker stellen", systemImage: "bell.fill") { audio.scheduleAlarm(at: nextOccurrence(for: alarmTime)) }
             }
         }
+    }
+
+    private var settingsView: some View {
+        NavigationStack {
+            Form {
+                Section("Benachrichtigungen") {
+                    Toggle("Ton", isOn: $soundEnabled)
+                    Toggle("Vibration", isOn: $vibrationEnabled)
+                }
+                Section("Standard-Timer") {
+                    Stepper(value: $timerMinutes, in: 0.5...120, step: 0.5) {
+                        Text(timerMinutes < 1 ? "30 Sekunden" : "\(timerMinutes, specifier: \"%g\") Minuten")
+                    }
+                }
+                Section("Sessions") {
+                    LabeledContent("Abgeschlossen", value: "\(completedSessions)")
+                    LabeledContent("Gesamt", value: formattedTotalDuration)
+                }
+            }
+            .navigationTitle("Einstellungen")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var sessionHistory: [[String: Any]] {
+        (appGroup?.array(forKey: "focusSessionHistory") as? [[String: Any]]) ?? []
+    }
+
+    private var completedSessions: Int { sessionHistory.count }
+
+    private var formattedTotalDuration: String {
+        let total = sessionHistory.reduce(0.0) { result, session in
+            result + (session["duration"] as? Double ?? 0)
+        }
+        let minutes = Int(total / 60)
+        return minutes < 60 ? "\(minutes) Min." : "\(minutes / 60) Std. \(minutes % 60) Min."
     }
 
     private func statusLabel(_ text: String) -> some View {

@@ -1,7 +1,9 @@
 import AVFoundation
 import Combine
 import Foundation
+import AudioToolbox
 import UserNotifications
+import WidgetKit
 
 @MainActor
 final class AudioManager: ObservableObject {
@@ -20,6 +22,7 @@ final class AudioManager: ObservableObject {
     private let defaults = UserDefaults(suiteName: "group.com.johannes.still") ?? .standard
     private let timerNotificationID = "still.timer.finished"
     private let alarmNotificationID = "still.alarm.fired"
+    private let historyKey = "focusSessionHistory"
 
     init() {
         configureAudioSession()
@@ -72,6 +75,8 @@ final class AudioManager: ObservableObject {
             try engine.start()
             audioEngine = engine
             isPlaying = true
+            defaults.set(true, forKey: "focusIsActive")
+            WidgetCenter.shared.reloadAllTimelines()
             StillActivityCoordinator.shared.showFocus()
         } catch {
             audioEngine = nil
@@ -84,6 +89,8 @@ final class AudioManager: ObservableObject {
         audioEngine?.stop()
         audioEngine = nil
         isPlaying = false
+        defaults.set(false, forKey: "focusIsActive")
+        WidgetCenter.shared.reloadAllTimelines()
         if !isAlarmPlaying {
             try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         }
@@ -96,6 +103,7 @@ final class AudioManager: ObservableObject {
         timerEndDate = Date().addingTimeInterval(duration)
         pausedRemaining = nil
         timerIsPaused = false
+        defaults.set(duration, forKey: "timerDuration")
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateTimer() }
         }
@@ -144,6 +152,7 @@ final class AudioManager: ObservableObject {
         timerEndDate = nil
         pausedRemaining = nil
         timerIsPaused = false
+        defaults.removeObject(forKey: "timerDuration")
         removeNotification(withIdentifier: timerNotificationID)
         persistState()
         if !isAlarmPlaying { stopFocus() }
@@ -181,6 +190,7 @@ final class AudioManager: ObservableObject {
     private func updateTimer() {
         guard timerEndDate != nil else { return }
         if timerRemaining <= 0 {
+            recordSession(duration: defaults.double(forKey: "timerDuration"))
             cancelTimer()
         }
     }
@@ -190,6 +200,10 @@ final class AudioManager: ObservableObject {
         alarmDate = nil
         persistState()
         stopFocus()
+        guard defaults.bool(forKey: "soundEnabled") else { return }
+        if defaults.bool(forKey: "vibrationEnabled") {
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        }
         isAlarmPlaying = true
         do {
             try audioSession.setActive(true, options: [])
@@ -314,7 +328,23 @@ final class AudioManager: ObservableObject {
 
     private func requestNotificationPermission() {
         Task {
-            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+            let center = UNUserNotificationCenter.current()
+            center.setNotificationCategories([
+                UNNotificationCategory(
+                    identifier: "STILL_TIMER",
+                    actions: [
+                        UNNotificationAction(identifier: "STILL_RESUME", title: "Fortsetzen"),
+                        UNNotificationAction(identifier: "STILL_CANCEL", title: "Beenden", options: [.destructive])
+                    ],
+                    intentIdentifiers: []
+                ),
+                UNNotificationCategory(
+                    identifier: "STILL_ALARM",
+                    actions: [UNNotificationAction(identifier: "STILL_CANCEL", title: "Beenden", options: [.destructive])],
+                    intentIdentifiers: []
+                )
+            ])
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
         }
     }
 
@@ -322,7 +352,8 @@ final class AudioManager: ObservableObject {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = .default
+        content.sound = defaults.bool(forKey: "soundEnabled") ? .default : nil
+        content.categoryIdentifier = identifier == alarmNotificationID ? "STILL_ALARM" : "STILL_TIMER"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
         let center = UNUserNotificationCenter.current()
@@ -332,6 +363,14 @@ final class AudioManager: ObservableObject {
 
     private func removeNotification(withIdentifier identifier: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+    }
+
+    private func recordSession(duration: TimeInterval) {
+        let completedDuration = max(0, duration)
+        guard completedDuration > 0 else { return }
+        var history = defaults.array(forKey: historyKey) as? [[String: Any]] ?? []
+        history.append(["date": Date().timeIntervalSince1970, "duration": completedDuration])
+        defaults.set(Array(history.suffix(50)), forKey: historyKey)
     }
 
     @objc private func handleRouteChange() {

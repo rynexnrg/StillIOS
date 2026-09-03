@@ -61,6 +61,13 @@ struct StillLiveActivity: Widget {
                     }
                 }
                 Spacer()
+                if context.state.endDate != nil {
+                    if context.state.isPaused {
+                        Button(intent: ResumeTimerIntent()) { Image(systemName: "play.fill") }
+                    } else {
+                        Button(intent: PauseTimerIntent()) { Image(systemName: "pause.fill") }
+                    }
+                }
                 Button(intent: CancelStillIntent()) { Image(systemName: "xmark") }
             }
             .padding()
@@ -75,6 +82,13 @@ struct StillLiveActivity: Widget {
                     Text(context.attributes.title).font(.headline)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
+                    if context.state.endDate != nil {
+                        if context.state.isPaused {
+                            Button(intent: ResumeTimerIntent()) { Image(systemName: "play.fill") }
+                        } else {
+                            Button(intent: PauseTimerIntent()) { Image(systemName: "pause.fill") }
+                        }
+                    }
                     Button(intent: CancelStillIntent()) { Image(systemName: "xmark") }
                 }
                 DynamicIslandExpandedRegion(.bottom) {

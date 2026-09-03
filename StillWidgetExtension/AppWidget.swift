@@ -6,7 +6,9 @@ private let appGroup = "group.com.johannes.still"
 
 struct WidgetState {
     static var defaults: UserDefaults { UserDefaults(suiteName: appGroup) ?? .standard }
-    static var focusIsActive: Bool { defaults.bool(forKey: "focusIsActive") }
+    static var focusIsActive: Bool {
+        defaults.bool(forKey: "focusIsActive") || defaults.object(forKey: "timerEndDate") != nil || defaults.object(forKey: "alarmDate") != nil
+    }
 }
 
 struct ToggleFocusIntent: AppIntent {
