@@ -44,7 +44,21 @@ jobs:
 
     - name: .app Artefakt speichern
       uses: actions/upload-artifact@v4
-      if: always()
+      if: success()
       with:
         name: Still-iOS-Simulator-App
         path: build/DerivedData/Build/Products/Release-iphonesimulator/Still.app
+
+    - name: Appetize ZIP erstellen
+      if: success()
+      run: |
+        ditto -c -k --sequesterRsrc --keepParent \
+          build/DerivedData/Build/Products/Release-iphonesimulator/Still.app \
+          build/Still-iOS-Simulator.zip
+
+    - name: Appetize ZIP speichern
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: Still-iOS-Simulator-ZIP
+        path: build/Still-iOS-Simulator.zip
