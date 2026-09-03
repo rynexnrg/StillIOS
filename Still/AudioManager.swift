@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import UserNotifications
 
 @MainActor
 final class AudioManager: ObservableObject {
@@ -16,9 +17,14 @@ final class AudioManager: ObservableObject {
     private var pausedRemaining: TimeInterval?
     private var alarmTimer: Timer?
     private var alarmStopTask: Task<Void, Never>?
+    private let defaults = UserDefaults(suiteName: "group.com.johannes.still") ?? .standard
+    private let timerNotificationID = "still.timer.finished"
+    private let alarmNotificationID = "still.alarm.fired"
 
     init() {
         configureAudioSession()
+        restoreState()
+        requestNotificationPermission()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleRouteChange),
@@ -93,6 +99,13 @@ final class AudioManager: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateTimer() }
         }
+        scheduleNotification(
+            identifier: timerNotificationID,
+            title: "Timer beendet",
+            body: "Deine Still-Session ist abgeschlossen.",
+            date: timerEndDate!
+        )
+        persistState()
         StillActivityCoordinator.shared.showTimer(endDate: timerEndDate!, isPaused: false)
     }
 
@@ -102,6 +115,8 @@ final class AudioManager: ObservableObject {
         timer = nil
         pausedRemaining = max(0, timerEndDate.timeIntervalSinceNow)
         timerIsPaused = true
+        removeNotification(withIdentifier: timerNotificationID)
+        persistState()
         StillActivityCoordinator.shared.updateTimer(endDate: Date().addingTimeInterval(pausedRemaining!), isPaused: true)
     }
 
@@ -113,6 +128,13 @@ final class AudioManager: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateTimer() }
         }
+        scheduleNotification(
+            identifier: timerNotificationID,
+            title: "Timer beendet",
+            body: "Deine Still-Session ist abgeschlossen.",
+            date: timerEndDate!
+        )
+        persistState()
         StillActivityCoordinator.shared.updateTimer(endDate: timerEndDate!, isPaused: false)
     }
 
@@ -122,6 +144,8 @@ final class AudioManager: ObservableObject {
         timerEndDate = nil
         pausedRemaining = nil
         timerIsPaused = false
+        removeNotification(withIdentifier: timerNotificationID)
+        persistState()
         if !isAlarmPlaying { stopFocus() }
         StillActivityCoordinator.shared.finish()
     }
@@ -130,6 +154,13 @@ final class AudioManager: ObservableObject {
         alarmTimer?.invalidate()
         alarmDate = date
         startFocus()
+        scheduleNotification(
+            identifier: alarmNotificationID,
+            title: "Still-Wecker",
+            body: "Dein Wecker ist fällig.",
+            date: date
+        )
+        persistState()
         StillActivityCoordinator.shared.showAlarm(date: date)
         let delay = max(0, date.timeIntervalSinceNow)
         alarmTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
@@ -141,6 +172,8 @@ final class AudioManager: ObservableObject {
         alarmTimer?.invalidate()
         alarmTimer = nil
         alarmDate = nil
+        removeNotification(withIdentifier: alarmNotificationID)
+        persistState()
         if !isAlarmPlaying && timerEndDate == nil { stopFocus() }
         StillActivityCoordinator.shared.finish()
     }
@@ -155,6 +188,7 @@ final class AudioManager: ObservableObject {
     private func fireAlarm() {
         alarmTimer = nil
         alarmDate = nil
+        persistState()
         stopFocus()
         isAlarmPlaying = true
         do {
@@ -208,6 +242,96 @@ final class AudioManager: ObservableObject {
         } catch {
             print("Still audio session could not be configured: \(error.localizedDescription)")
         }
+    }
+
+    private func restoreState() {
+        if let timestamp = defaults.object(forKey: "timerEndDate") as? Double {
+            let endDate = Date(timeIntervalSince1970: timestamp)
+            timerEndDate = endDate
+            timerIsPaused = defaults.bool(forKey: "timerIsPaused")
+            pausedRemaining = defaults.object(forKey: "timerPausedRemaining") as? Double
+
+            if timerIsPaused {
+                if pausedRemaining ?? 0 > 0 {
+                    startFocus()
+                } else {
+                    cancelTimer()
+                }
+            } else if endDate > Date() {
+                startFocus()
+                timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                    Task { @MainActor in self?.updateTimer() }
+                }
+                scheduleNotification(
+                    identifier: timerNotificationID,
+                    title: "Timer beendet",
+                    body: "Deine Still-Session ist abgeschlossen.",
+                    date: endDate
+                )
+            } else {
+                cancelTimer()
+            }
+        }
+
+        if let timestamp = defaults.object(forKey: "alarmDate") as? Double {
+            let date = Date(timeIntervalSince1970: timestamp)
+            if date > Date() {
+                alarmDate = date
+                startFocus()
+                alarmTimer = Timer.scheduledTimer(withTimeInterval: date.timeIntervalSinceNow, repeats: false) { [weak self] _ in
+                    Task { @MainActor in self?.fireAlarm() }
+                }
+                scheduleNotification(
+                    identifier: alarmNotificationID,
+                    title: "Still-Wecker",
+                    body: "Dein Wecker ist fällig.",
+                    date: date
+                )
+            } else {
+                defaults.removeObject(forKey: "alarmDate")
+            }
+        }
+    }
+
+    private func persistState() {
+        if let timerEndDate {
+            defaults.set(timerEndDate.timeIntervalSince1970, forKey: "timerEndDate")
+        } else {
+            defaults.removeObject(forKey: "timerEndDate")
+        }
+        defaults.set(timerIsPaused, forKey: "timerIsPaused")
+        if let pausedRemaining {
+            defaults.set(pausedRemaining, forKey: "timerPausedRemaining")
+        } else {
+            defaults.removeObject(forKey: "timerPausedRemaining")
+        }
+        if let alarmDate {
+            defaults.set(alarmDate.timeIntervalSince1970, forKey: "alarmDate")
+        } else {
+            defaults.removeObject(forKey: "alarmDate")
+        }
+    }
+
+    private func requestNotificationPermission() {
+        Task {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        }
+    }
+
+    private func scheduleNotification(identifier: String, title: String, body: String, date: Date) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.add(request)
+    }
+
+    private func removeNotification(withIdentifier identifier: String) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
     }
 
     @objc private func handleRouteChange() {

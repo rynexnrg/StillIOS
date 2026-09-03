@@ -3,8 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var audio = AudioManager()
     @State private var selectedTab = 0
-    @State private var timerMinutes = 5.0
-    @State private var alarmTime = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+    @AppStorage("timerMinutes", store: UserDefaults(suiteName: "group.com.johannes.still")) private var timerMinutes = 5.0
+    @AppStorage("alarmTime", store: UserDefaults(suiteName: "group.com.johannes.still")) private var alarmTime = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
 
     var body: some View {
         ZStack {
