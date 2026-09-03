@@ -112,7 +112,6 @@ struct ContentView: View {
                     presetButton("5 min", hours: 0, minutes: 5, seconds: 0)
                     presetButton("30 min", hours: 0, minutes: 30, seconds: 0)
                     presetButton("2 h", hours: 2, minutes: 0, seconds: 0)
-                    }
                 }
             }
             HStack(spacing: 12) {
