@@ -35,4 +35,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         completionHandler()
     }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if notification.request.identifier == "still.alarm.fired" {
+            NotificationCenter.default.post(name: .stillAlarmFired, object: nil)
+        }
+        completionHandler([.banner, .sound])
+    }
+}
+
+extension Notification.Name {
+    static let stillAlarmFired = Notification.Name("StillAlarmFired")
 }

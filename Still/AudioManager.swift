@@ -45,6 +45,12 @@ final class AudioManager: ObservableObject {
             name: AVAudioSession.interruptionNotification,
             object: audioSession
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAlarmNotification),
+            name: .stillAlarmFired,
+            object: nil
+        )
     }
 
     deinit {
@@ -410,5 +416,9 @@ final class AudioManager: ObservableObject {
               let type = AVAudioSession.InterruptionType(rawValue: typeValue),
               type == .ended else { return }
         startFocus()
+    }
+
+    @objc private func handleAlarmNotification() {
+        fireAlarm()
     }
 }

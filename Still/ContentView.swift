@@ -96,9 +96,11 @@ struct ContentView: View {
     private var timerView: some View {
         VStack(spacing: 28) {
             statusLabel(audio.timerEndDate == nil ? "Timer" : (audio.timerIsPaused ? "Pausiert" : "Läuft"))
-            Text(timerDisplay)
-                .font(.system(size: 58, weight: .ultraLight, design: .rounded)).monospacedDigit().foregroundStyle(.white)
-                .contentTransition(.numericText())
+            if audio.timerEndDate != nil {
+                Text(timerDisplay)
+                    .font(.system(size: 58, weight: .ultraLight, design: .rounded)).monospacedDigit().foregroundStyle(.white)
+                    .contentTransition(.numericText())
+            }
             if audio.timerEndDate == nil {
                 HStack(spacing: 0) {
                     timerWheel(title: "Std.", value: $timerHours, range: 0...99)
