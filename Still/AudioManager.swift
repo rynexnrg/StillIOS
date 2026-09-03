@@ -375,7 +375,8 @@ final class AudioManager: ObservableObject {
         content.title = title
         content.body = body
         if defaults.bool(forKey: "soundEnabled") {
-            content.sound = identifier == alarmNotificationID ? UNNotificationSound(named: "\(defaults.string(forKey: "alarmSound") ?? "ios-26").mp3") : .default
+            let soundName = UNNotificationSoundName(rawValue: "\(defaults.string(forKey: "alarmSound") ?? "ios-26").mp3")
+            content.sound = identifier == alarmNotificationID ? UNNotificationSound(named: soundName) : .default
         }
         content.categoryIdentifier = identifier == alarmNotificationID ? "STILL_ALARM" : "STILL_TIMER"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
