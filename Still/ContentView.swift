@@ -204,8 +204,12 @@ struct ContentView: View {
     private func actionButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage).font(.system(size: 15, weight: .medium)).foregroundStyle(.black)
-                .padding(.horizontal, 20).padding(.vertical, 13).background(.white, in: Capsule())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 14).padding(.vertical, 12).background(.white, in: Capsule())
         }
+        .frame(maxWidth: 210)
     }
 
     private func timeString(_ seconds: TimeInterval) -> String {

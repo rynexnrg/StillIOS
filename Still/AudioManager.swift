@@ -385,7 +385,9 @@ final class AudioManager: ObservableObject {
             content.sound = identifier == alarmNotificationID ? UNNotificationSound(named: soundName) : .default
         }
         content.categoryIdentifier = identifier == alarmNotificationID ? "STILL_ALARM" : "STILL_TIMER"
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
