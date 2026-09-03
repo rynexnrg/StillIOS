@@ -122,7 +122,7 @@ struct ContentView: View {
                 }
                 Section("Standard-Timer") {
                     Stepper(value: $timerMinutes, in: 0.5...120, step: 0.5) {
-                        Text(timerMinutes < 1 ? "30 Sekunden" : "\(timerMinutes, specifier: \"%g\") Minuten")
+                        Text(timerMinutes < 1 ? "30 Sekunden" : "\(timerMinutes, specifier: "%g") Minuten")
                     }
                 }
                 Section("Sessions") {
