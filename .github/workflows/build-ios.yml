@@ -52,9 +52,10 @@ jobs:
     - name: Appetize ZIP erstellen
       if: success()
       run: |
-        ditto -c -k --sequesterRsrc --keepParent \
-          build/DerivedData/Build/Products/Release-iphonesimulator/Still.app \
-          build/Still-iOS-Simulator.zip
+        cd build/DerivedData/Build/Products/Release-iphonesimulator
+        zip -qry -X "$GITHUB_WORKSPACE/build/Still-iOS-Simulator.zip" Still.app
+        cd "$GITHUB_WORKSPACE"
+        unzip -l build/Still-iOS-Simulator.zip | head -20
 
     - name: Appetize ZIP speichern
       uses: actions/upload-artifact@v4
