@@ -3,7 +3,6 @@ import Combine
 import Foundation
 import AudioToolbox
 import UserNotifications
-import WidgetKit
 
 @MainActor
 final class AudioManager: ObservableObject {
@@ -76,8 +75,6 @@ final class AudioManager: ObservableObject {
             audioEngine = engine
             isPlaying = true
             defaults.set(true, forKey: "focusIsActive")
-            WidgetCenter.shared.reloadAllTimelines()
-            StillActivityCoordinator.shared.showFocus()
         } catch {
             audioEngine = nil
             isPlaying = false
@@ -90,7 +87,6 @@ final class AudioManager: ObservableObject {
         audioEngine = nil
         isPlaying = false
         defaults.set(false, forKey: "focusIsActive")
-        WidgetCenter.shared.reloadAllTimelines()
         if !isAlarmPlaying {
             try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         }
@@ -114,7 +110,6 @@ final class AudioManager: ObservableObject {
             date: timerEndDate!
         )
         persistState()
-        StillActivityCoordinator.shared.showTimer(endDate: timerEndDate!, isPaused: false)
     }
 
     func pauseTimer() {
@@ -125,7 +120,6 @@ final class AudioManager: ObservableObject {
         timerIsPaused = true
         removeNotification(withIdentifier: timerNotificationID)
         persistState()
-        StillActivityCoordinator.shared.updateTimer(endDate: Date().addingTimeInterval(pausedRemaining!), isPaused: true)
     }
 
     func resumeTimer() {
@@ -143,7 +137,6 @@ final class AudioManager: ObservableObject {
             date: timerEndDate!
         )
         persistState()
-        StillActivityCoordinator.shared.updateTimer(endDate: timerEndDate!, isPaused: false)
     }
 
     func cancelTimer() {
@@ -156,7 +149,6 @@ final class AudioManager: ObservableObject {
         removeNotification(withIdentifier: timerNotificationID)
         persistState()
         if !isAlarmPlaying { stopFocus() }
-        StillActivityCoordinator.shared.finish()
     }
 
     func scheduleAlarm(at date: Date) {
@@ -170,7 +162,6 @@ final class AudioManager: ObservableObject {
             date: date
         )
         persistState()
-        StillActivityCoordinator.shared.showAlarm(date: date)
         let delay = max(0, date.timeIntervalSinceNow)
         alarmTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.fireAlarm() }
@@ -184,7 +175,6 @@ final class AudioManager: ObservableObject {
         removeNotification(withIdentifier: alarmNotificationID)
         persistState()
         if !isAlarmPlaying && timerEndDate == nil { stopFocus() }
-        StillActivityCoordinator.shared.finish()
     }
 
     private func updateTimer() {

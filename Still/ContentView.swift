@@ -33,9 +33,6 @@ struct ContentView: View {
             .padding(.horizontal, 22)
         }
         .preferredColorScheme(.dark)
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            StillIntentBridge.consumePendingCommands(audio: audio)
-        }
         .sheet(isPresented: $showingSettings) { settingsView }
     }
 
