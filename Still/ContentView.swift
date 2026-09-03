@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct AlarmSound {
+    let id: String
+    let name: String
+}
+
 struct ContentView: View {
     @StateObject private var audio = AudioManager()
     @State private var selectedTab = 0
@@ -217,4 +222,3 @@ struct ContentView: View {
     }
 }
 
-private struct AlarmSound { let id: String; let name: String }
