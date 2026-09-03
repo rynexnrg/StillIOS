@@ -24,11 +24,14 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.top, 18)
-                modePicker.padding(.top, 28)
-                Spacer(minLength: 28)
+                .padding(.horizontal, 8)
+                Spacer(minLength: 22)
                 Group { switch selectedTab { case 1: timerView; case 2: alarmView; default: focusView } }
                     .frame(maxWidth: 520)
-                Spacer(minLength: 28)
+                Spacer(minLength: 18)
+                modePicker
+                    .padding(.horizontal, 2)
+                    .padding(.bottom, 4)
             }
             .padding(.horizontal, 22)
         }
@@ -56,15 +59,22 @@ struct ContentView: View {
     }
 
     private var focusView: some View {
-        VStack(spacing: 34) {
+        VStack(spacing: 24) {
             statusLabel(audio.isPlaying ? "Fokus aktiv" : "Bereit")
             Button { withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { audio.toggleFocus() } } label: {
                 ZStack {
-                    Circle().fill(.ultraThinMaterial).frame(width: 220, height: 220)
-                        .overlay(Circle().fill(audio.isPlaying ? .cyan.opacity(0.32) : .white.opacity(0.1)))
-                        .overlay(Circle().stroke(.white.opacity(0.48), lineWidth: 1))
-                        .shadow(color: audio.isPlaying ? .cyan.opacity(0.42) : .black.opacity(0.3), radius: 28, y: 12)
-                    Image(systemName: audio.isPlaying ? "pause.fill" : "waveform").font(.system(size: 30, weight: .light)).foregroundStyle(.white)
+                    Circle().stroke(.white.opacity(0.08), lineWidth: 1).frame(width: 238, height: 238)
+                    Circle().stroke(audio.isPlaying ? .cyan.opacity(0.55) : .white.opacity(0.18), lineWidth: 2).frame(width: 216, height: 216)
+                    Circle().fill(.ultraThinMaterial).frame(width: 190, height: 190)
+                        .overlay(Circle().fill(audio.isPlaying ? .cyan.opacity(0.26) : .white.opacity(0.08)))
+                        .overlay(Circle().stroke(LinearGradient(colors: [.white.opacity(0.65), .cyan.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1))
+                        .shadow(color: audio.isPlaying ? .cyan.opacity(0.5) : .black.opacity(0.35), radius: 30, y: 14)
+                    VStack(spacing: 10) {
+                        Image(systemName: audio.isPlaying ? "pause.fill" : "waveform")
+                            .font(.system(size: 28, weight: .medium))
+                        Text(audio.isPlaying ? "ON" : "START")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced)).tracking(2)
+                    }.foregroundStyle(.white)
                 }
             }.buttonStyle(.plain)
             Text(audio.isPlaying ? "Deaktivieren" : "Aktivieren").font(.system(size: 17, weight: .light, design: .rounded)).foregroundStyle(.white.opacity(0.72))
