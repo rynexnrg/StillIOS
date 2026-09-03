@@ -49,10 +49,22 @@ jobs:
         name: Still-iOS-Simulator-App
         path: build/DerivedData/Build/Products/Release-iphonesimulator/Still.app
 
-    - name: Appetize ZIP erstellen
+    - name: ARM64 Appetize ZIP erstellen
       if: success()
       run: |
-        cd build/DerivedData/Build/Products/Release-iphonesimulator
+        rm -rf build/AppetizeDerivedData
+        xcodebuild build \
+          -project Still.xcodeproj \
+          -scheme Still \
+          -destination 'generic/platform=iOS Simulator' \
+          -configuration Debug \
+          -derivedDataPath build/AppetizeDerivedData \
+          ARCHS=arm64 \
+          ONLY_ACTIVE_ARCH=YES \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY=""
+        cd build/AppetizeDerivedData/Build/Products/Debug-iphonesimulator
         zip -qry -X "$GITHUB_WORKSPACE/build/Still-iOS-Simulator.zip" Still.app
         cd "$GITHUB_WORKSPACE"
         unzip -l build/Still-iOS-Simulator.zip | head -20
