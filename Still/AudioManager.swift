@@ -239,17 +239,12 @@ final class AudioManager: ObservableObject {
             engine.connect(source, to: engine.mainMixerNode, format: format)
             try engine.start()
             audioEngine = engine
-            alarmStopTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled else { return }
-                await MainActor.run { self?.stopAlarm() }
-            }
         } catch {
             stopAlarm()
         }
     }
 
-    private func stopAlarm() {
+    func stopAlarm() {
         alarmStopTask?.cancel()
         alarmStopTask = nil
         audioEngine?.stop()

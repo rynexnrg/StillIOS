@@ -125,7 +125,10 @@ struct ContentView: View {
         VStack(spacing: 30) {
             statusLabel(audio.alarmDate == nil ? "Wecker" : "Wecker aktiv")
             DatePicker("Zeit", selection: $alarmTime, displayedComponents: .hourAndMinute).datePickerStyle(.wheel).labelsHidden().frame(height: 150).clipped()
-            if let alarmDate = audio.alarmDate {
+            if audio.isAlarmPlaying {
+                statusLabel("Wecker klingelt")
+                actionButton("Wecker stoppen", systemImage: "bell.slash.fill") { audio.stopAlarm() }
+            } else if let alarmDate = audio.alarmDate {
                 Text(alarmDate, style: .time).font(.system(size: 17, weight: .light, design: .rounded)).foregroundStyle(.white.opacity(0.72))
                 actionButton("Abbrechen", systemImage: "xmark") { audio.cancelAlarm() }
             } else {
