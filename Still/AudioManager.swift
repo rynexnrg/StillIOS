@@ -199,10 +199,10 @@ final class AudioManager: ObservableObject {
             try audioSession.setActive(true, options: [])
             let engine = AVAudioEngine()
             let sampleRate = audioSession.sampleRate > 0 ? audioSession.sampleRate : 44_100
+            let frequency = alarmFrequency
             var phase = 0.0
             let source = AVAudioSourceNode { _, _, frameCount, audioBufferList in
                 let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
-                let frequency = alarmFrequency
                 let increment = 2.0 * Double.pi * frequency / sampleRate
                 for frame in 0..<Int(frameCount) {
                     let sample = Float(sin(phase) * 0.18)
