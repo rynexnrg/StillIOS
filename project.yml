@@ -11,18 +11,4 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.johannes.Still
       GENERATE_INFOPLIST_FILE: YES
       CODE_SIGN_ENTITLEMENTS: Still/Still.entitlements
-      INFOPLIST_KEY_NSSupportsLiveActivities: YES
       INFOPLIST_KEY_UIBackgroundModes: ["audio"]
-    dependencies:
-      - target: StillWidgetExtension
-        embed: true
-
-  StillWidgetExtension:
-    type: app-extension
-    platform: iOS
-    deploymentTarget: "18.0"
-    sources: [StillWidgetExtension]
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.johannes.Still.StillWidgetExtension
-      GENERATE_INFOPLIST_FILE: YES
-      CODE_SIGN_ENTITLEMENTS: StillWidgetExtension/StillWidgetExtension.entitlements
