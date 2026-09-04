@@ -1,16 +1,21 @@
 name: Still
 options:
   bundleIdPrefix: com.johannes
+  developmentLanguage: de
 targets:
   Still:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    sources: [Still]
+    sources:
+      - Still
     resources:
       - path: Still/Sounds
+      - path: Still/Assets.xcassets
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.johannes.Still
       GENERATE_INFOPLIST_FILE: YES
       CODE_SIGN_ENTITLEMENTS: Still/Still.entitlements
       INFOPLIST_KEY_UIBackgroundModes: ["audio"]
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      CODE_SIGN_STYLE: Automatic
