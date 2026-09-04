@@ -1,4 +1,4 @@
-name: Build Still iOS App
+name: Build Still iOS App (.ipa)
 
 on:
   push:
@@ -14,64 +14,40 @@ jobs:
     - name: Code auschecken
       uses: actions/checkout@v4
 
-    - name: Homebrew Tap-Trust Umgehung aktivieren
-      run: echo "HOMEBREW_NO_REQUIRE_TAP_TRUST=1" >> $GITHUB_ENV
-
     - name: XcodeGen installieren
       run: brew install xcodegen
 
     - name: Alte Caches und Projekte bereinigen
       run: |
-        rm -rf ~/.xcodegen/cache
         rm -rf Still.xcodeproj
         rm -rf build/
-        rm -rf DerivedData/
 
-    - name: Xcode-Projekt (Still.xcodeproj) generieren
+    - name: Xcode-Projekt generieren
       run: xcodegen generate
 
-    - name: App für iOS-Simulator bauen
+    - name: App für echtes iOS-Gerät kompilieren
       run: |
         xcodebuild build \
           -project Still.xcodeproj \
           -scheme Still \
-          -destination 'generic/platform=iOS Simulator' \
+          -destination 'generic/platform=iOS' \
           -configuration Release \
           -derivedDataPath build/DerivedData \
           CODE_SIGNING_ALLOWED=NO \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGN_IDENTITY=""
 
-    - name: .app Artefakt speichern
-      uses: actions/upload-artifact@v4
-      if: success()
-      with:
-        name: Still-iOS-Simulator-App
-        path: build/DerivedData/Build/Products/Release-iphonesimulator/Still.app
-
-    - name: ARM64 Appetize ZIP erstellen
-      if: success()
+    - name: .ipa Paket erstellen
       run: |
-        rm -rf build/AppetizeDerivedData
-        xcodebuild build \
-          -project Still.xcodeproj \
-          -scheme Still \
-          -destination 'generic/platform=iOS Simulator' \
-          -configuration Debug \
-          -derivedDataPath build/AppetizeDerivedData \
-          ARCHS=arm64 \
-          ONLY_ACTIVE_ARCH=YES \
-          CODE_SIGNING_ALLOWED=NO \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGN_IDENTITY=""
-        cd build/AppetizeDerivedData/Build/Products/Debug-iphonesimulator
-        zip -qry -X "$GITHUB_WORKSPACE/build/Still-iOS-Simulator.zip" Still.app
-        cd "$GITHUB_WORKSPACE"
-        unzip -l build/Still-iOS-Simulator.zip | head -20
+        mkdir -p build/Payload
+        cp -R build/DerivedData/Build/Products/Release-iphoneos/Still.app build/Payload/
+        cd build
+        zip -r Still.ipa Payload
+        cd ..
 
-    - name: Appetize ZIP speichern
+    - name: .ipa Artefakt hochladen
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: Still-iOS-Simulator-ZIP
-        path: build/Still-iOS-Simulator.zip
+        name: Still-iOS-App-IPA
+        path: build/Still.ipa
